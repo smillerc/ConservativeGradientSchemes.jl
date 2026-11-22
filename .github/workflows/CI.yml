@@ -1,26 +1,47 @@
-name: Tests
-
+name: CI
 on:
   push:
-    branches: [main]
+    branches:
+      - main
+    tags: ['*']
   pull_request:
 
 permissions:
   contents: read
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ startsWith(github.ref, 'refs/pull/') }}
+
 jobs:
   test:
-    runs-on: ubuntu-latest
+    if: github.event_name != 'push' || !github.event.deleted
+    name: Julia ${{ matrix.version }} - ${{ matrix.os }} - ${{ matrix.arch }} - ${{ github.event_name }}
+    runs-on: ${{ matrix.os }}
     strategy:
+      fail-fast: false
       matrix:
-        julia: ['~1.13', '1']
-    env:
-      POCL_CACHE_DIR: ${{ runner.temp }}/pocl
+        version:
+          - '1.13'
+        os:
+          - ubuntu-latest
+        arch:
+          - x64
     steps:
-      - uses: actions/checkout@v6
-      - uses: julia-actions/setup-julia@v3
+      - uses: actions/checkout@v3
+      - uses: julia-actions/setup-julia@v2
         with:
-          version: ${{ matrix.julia }}
-      - run: >-
-          julia --startup-file=no --project -e
-          'using Pkg; Pkg.instantiate(); Pkg.test(; julia_args=["--check-bounds=auto"])'
+          version: ${{ matrix.version }}
+          arch: ${{ matrix.arch }}
+      - uses: julia-actions/cache@v2
+      - name: Check Runic formatting
+        run: |
+          julia --startup-file=no --project=@runic-ci -e 'using Pkg; Pkg.add(PackageSpec(; name="Runic", version=v"1.13.0"))'
+          git ls-files -z -- '*.jl' | xargs -0 --no-run-if-empty julia --startup-file=no --project=@runic-ci -m Runic --check --diff
+      - uses: julia-actions/julia-buildpkg@v1
+      - uses: julia-actions/julia-runtest@v1
+        env:
+          POCL_CACHE_DIR: ${{ runner.temp }}/pocl
+        with:
+          check_bounds: auto
+          coverage: 'false'
