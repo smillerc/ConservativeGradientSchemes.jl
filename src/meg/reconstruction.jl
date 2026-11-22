@@ -47,7 +47,7 @@ end
         snap(q[J], q[J] - minmod(q[J] - right, rs / 2))
 end
 
-# Eddy's MP5 bounds use ordinary second differences, not MEG curvature.
+# Compute MP5 bounds with ordinary second differences.
 @inline function _minmod(a::T, b::T) where {T}
     half = T(1) / T(2)
     return half * (sign(a) + sign(b)) * min(abs(a), abs(b))

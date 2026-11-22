@@ -11,9 +11,12 @@
     return (a - b) * !isapprox(a, b; rtol = sqrt(eps(T)), atol = 10 * eps(T))
 end
 
-@inline function compensated_sum(values)
-    total = zero(eltype(values))
-    correction = zero(eltype(values))
+@inline compensated_sum(values) = compensated_sum(values, zero(eltype(values)))
+@inline compensated_sum(values::NTuple{N, T}) where {N, T} = compensated_sum(values, zero(T))
+
+@inline function compensated_sum(values, initial)
+    total = initial
+    correction = initial
     for value in values
         adjusted = value - correction
         next = total + adjusted

@@ -1,12 +1,13 @@
 name = "ConservativeGradientSchemes"
 uuid = "07ae2340-cd05-4116-baac-ffb7c69c5ead"
 version = "0.1.0"
+authors = ["Sam Miller <smil@lle.rochester.edu> and contributors"]
 
 [deps]
 KernelAbstractions = "63c18a36-062a-441e-b654-da1e3ab1ce7c"
 
 [compat]
-KernelAbstractions = "0.10"
+KernelAbstractions = "0.10.4"
 julia = "1.13"
 
 [extras]

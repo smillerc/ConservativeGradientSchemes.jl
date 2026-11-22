@@ -7,13 +7,13 @@
 
 @kernel function first_kernel!(dest, scheme, q, axis, centers, domain, lo, hi)
     i = @index(Global, Linear)
-    I = domain[i]
+    @inbounds I = domain[i]
     @inbounds dest[I] = sweep_first(scheme, q, I, axis, lo, hi) / spacing(q[I], centers, axis)
 end
 
 @kernel function second_kernel!(dest, scheme, q, first, axis, centers, domain, lo, hi)
     i = @index(Global, Linear)
-    I = domain[i]
+    @inbounds I = domain[i]
     @inbounds dest[I] = sweep_second(scheme, q, first, I, axis, spacing(q[I], centers, axis), lo, hi)
 end
 
@@ -30,13 +30,13 @@ end
 
 @kernel function metric_faces_kernel!(dest, scheme, q, first, second, axis, centers, faces, domain, lo, hi)
     i = @index(Global, Linear)
-    I = domain[i]
+    @inbounds I = domain[i]
     @inbounds dest[I] = metric_face(scheme, q, first, second, I, axis, centers, faces, lo, hi)
 end
 
 @kernel function metric_derivative_kernel!(dest, scheme, q, first, second, axis, centers, faces, domain, lo, hi)
     i = @index(Global, Linear)
-    I = domain[i]
+    @inbounds I = domain[i]
     @inbounds begin
         low = metric_face(scheme, q, first, second, I, axis, centers, faces, lo, hi)
         high = metric_face(scheme, q, first, second, shift(I, axis, 1), axis, centers, faces, lo, hi)

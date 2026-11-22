@@ -5,8 +5,8 @@ using Test
 @testset "MEG6 metric boundaries without halos" begin
     backend = CPU()
     scheme = MEG{6}()
-    centers = (0.0:0.25:2.75,)
-    faces = (-0.125:0.25:2.875,)
+    centers = (collect(0.0:0.25:2.75),)
+    faces = (collect(-0.125:0.25:2.875),)
     samples = collect(only(centers))
     cells = CartesianIndices(samples)
     first_derivative = similar(samples)
@@ -55,4 +55,32 @@ end
     @test reconstruct_edge(scheme, MP5Limiter(), q, i, 1) == (6.5, 6.5)
     @test reconstruct_edge(scheme, q, i, 1, first_derivative) == (6.5, 6.5)
     @test reconstruct_edge(scheme, q, i, 1) == (6.5, 6.5)
+end
+
+@testset "MEG6 MP5 corrects an overshoot" begin
+    scheme = MEG{6}()
+    q = ones(12)
+    first_derivative = zeros(12)
+    second_derivative = fill(12.0, 12)
+    i = CartesianIndex(6)
+    centers, faces = (1:12,), (0.5:12.5,)
+
+    @test reconstruct_edge(scheme, q, i, 1, centers, faces, first_derivative, second_derivative) == (2.0, 2.0)
+    @test reconstruct_edge(scheme, MP5Limiter(), q, i, 1, centers, faces, first_derivative, second_derivative) == (1.0, 1.0)
+end
+
+@testset "MEG6 logical and physical gradients" begin
+    scheme = MEG{6}()
+    centers = (0.0:0.5:5.0, 0.0:0.25:2.5)
+    q = [2x - 3y for x in centers[1], y in centers[2]]
+    i = CartesianIndex(6, 6)
+    inverse_jacobian = [2.0 1.0; 0.0 4.0]
+    dest = (similar(q), similar(q))
+
+    @test curvilinear_cell_gradient(scheme, q, i, centers) == (2.0, -3.0)
+    @test physical_cell_gradient(scheme, q, i, centers, inverse_jacobian) == (4.0, -10.0)
+    @test curvilinear_cell_gradient!(dest, scheme, q, i, centers) === nothing
+    @test (dest[1][i], dest[2][i]) == (2.0, -3.0)
+    @test physical_cell_gradient!(dest, scheme, q, i, centers, inverse_jacobian) === nothing
+    @test (dest[1][i], dest[2][i]) == (4.0, -10.0)
 end
