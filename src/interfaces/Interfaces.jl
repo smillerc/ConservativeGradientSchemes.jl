@@ -43,9 +43,10 @@ over the entire stencil, including halos where needed. The call reads its inputs
 without mutating them.
 
 The first form applies the reconstruction scheme as defined, including any
-intrinsic weighting or monotonicity rules. The second form requests an additional
-limiter for a supported scheme and limiter pair. Prepared overloads also accept
-a limiter immediately after the scheme for supported combinations.
+intrinsic weighting or monotonicity rules. With a built-in limiter, the default
+overload computes that pair and calls `limit_face_pair`. Use it for midpoint
+faces on a uniform logical axis. A scheme can specialize the overload when
+it needs to limit intermediate face candidates.
 
 `first` and `second` are read-only cell-indexed arrays for the same samples and
 axis, with the units of the first and second logical derivatives, respectively.
@@ -101,6 +102,9 @@ sweep borrows the prepared first derivative at each location its stencil reads.
 output domain. Supply valid halo samples where the centered stencil requires
 them. All arrays must use compatible indexing and storage on `backend`.
 The caller owns the output and must keep it disjoint from the inputs.
+
+For `Central`, use the same derivative and inward closures as
+`metric_cell_derivative!`. Use `centers = nothing` for unit logical spacing.
 """
 function prepare_first_derivative! end
 
@@ -130,11 +134,17 @@ An empty output domain skips its sweep. Return `nothing`.
 function prepare_metric_derivatives! end
 
 """
+    interpolate_metric_edges!(dest, scheme::Central, samples, axis,
+                              face_domain, valid_cells, backend)
     interpolate_metric_edges!(dest, scheme::AbstractScheme, samples, first, second,
                               axis, centers, faces, face_domain, valid_cells, backend)
 
 Write single-valued metric faces in `face_domain` and return `nothing`.
-Use the arithmetic mean of the two reconstructions on interior faces. On a low
+For `Central`, evaluate each face directly from the samples. Its face weights
+produce the centered derivative after differencing in the interior. Use the
+inward closure where the interior stencil would cross `valid_cells`.
+
+For MEG, use the arithmetic mean of the two reconstructions on interior faces. On a low
 or high boundary of `valid_cells`, call `reconstruct_boundary_edge` with the
 adjacent in-domain cell. Read no exterior geometry or derivative values.
 
@@ -147,18 +157,26 @@ compatible with `backend` and disjoint from the inputs.
 function interpolate_metric_edges! end
 
 """
+    metric_cell_derivative!(dest, scheme::Central, samples, axis, centers,
+                            domain, valid_cells, backend)
     metric_cell_derivative!(dest, scheme::AbstractScheme, samples, first, second,
                                  axis, centers, faces, domain, valid_cells, backend)
 
 Write one logical derivative component at each cell in `domain` and return
-`nothing`. For the MEG metric operator, use the arithmetic mean of the left
+`nothing`. For `Central`, difference the same face values produced by
+`interpolate_metric_edges!` and divide by the constant logical spacing along
+`axis`. Supply one coordinate array per logical axis, or `nothing` for unit
+logical spacing. The valid domain must contain every sample read by the sweep.
+
+For the MEG metric operator, use the arithmetic mean of the left
 and right reconstructions as the single value of each interior face. At the
 low or high end of `valid_cells`, use the corresponding in-domain boundary
 face value from `reconstruct_boundary_edge`. For each cell, subtract the low
 face value from the high face value and divide by its logical face spacing.
 
-The caller supplies read-only samples and prepared derivatives on the stencil
-region, with one-sided preparation where geometry halos are unavailable.
+The caller supplies read-only samples on the stencil region. For MEG, also
+supply prepared derivatives with one-sided preparation where geometry halos
+are unavailable.
 The sweep needs no geometry beyond those boundary faces. It can evaluate face
 values as needed without allocating face arrays. `dest` is caller-owned,
 indexed by cell, compatible with `backend`, and disjoint from the inputs.
@@ -175,7 +193,8 @@ field per unit of its logical coordinate.
 Supply cell-indexed scalar samples and a tuple of one-dimensional logical
 coordinate arrays with `centers[d][j]` locating cell `j` on axis `d`.
 Supply valid samples and coordinates over the entire stencil, including halos
-where needed. The call reads its inputs without mutating them.
+where needed. `Central` also accepts `centers = nothing` for unit logical
+spacing. The call reads its inputs without mutating them.
 """
 function curvilinear_cell_gradient end
 
