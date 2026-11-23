@@ -1,3 +1,91 @@
+@inline metric_boundary_width(::MEG{Order}) where {Order} = Order + 1
+@inline metric_boundary_width(::MEG{6}) = 6
+
+# Centered coefficients multiply the paired differences in order of increasing offset.
+@inline metric_centered_weights(::MEG{2}) = ((1,), 2)
+@inline metric_centered_weights(::MEG{4}) = ((8, -1), 12)
+@inline metric_centered_weights(::MEG{6}) = ((45, -9, 1), 60)
+@inline metric_centered_weights(::MEG{8}) = ((672, -168, 32, -3), 840)
+
+# Each row differentiates the Lagrange interpolant at its cell index.
+# We store integer numerators and a common denominator for each row.
+@inline function metric_inward_weights(::MEG{2}, depth)
+    rows = (
+        ((-3, 4, -1), 2),
+    )
+    return rows[depth + 1]
+end
+
+@inline function metric_inward_weights(::MEG{4}, depth)
+    rows = (
+        ((-25, 48, -36, 16, -3), 12),
+        ((-3, -10, 18, -6, 1), 12),
+    )
+    return rows[depth + 1]
+end
+
+@inline function metric_inward_weights(::MEG{8}, depth)
+    rows = (
+        ((-2283, 6720, -11760, 15680, -14700, 9408, -3920, 960, -105), 840),
+        ((-105, -1338, 2940, -2940, 2450, -1470, 588, -140, 15), 840),
+        ((15, -240, -798, 1680, -1050, 560, -210, 48, -5), 840),
+        ((-5, 60, -420, -378, 1050, -420, 140, -30, 3), 840),
+    )
+    return rows[depth + 1]
+end
+
+@inline function metric_inward_value(scheme, samples::NTuple{N}, depth, ::Val{C}, ϵ) where {N, C}
+    weights, divisor = metric_inward_weights(scheme, depth)
+    center = samples[depth + 1]
+    terms = ntuple(k -> (C(weights[k]) / C(divisor)) * (samples[k] - center), Val(N))
+    value = compensated_sum(terms)
+    return value * (abs(value) >= ϵ)
+end
+
+"""
+    metric_centered_first(scheme::MEG{Order}, samples::NTuple{Order}, ϵ, coefficient_type)
+
+Evaluate the centered metric first derivative in unit logical spacing. Supply
+samples in increasing index order and omit the center sample. The tolerance
+defaults to machine epsilon of the sample type. Pass `Val(Float32)` or
+`Val(Float64)` to select the coefficient type. The default is `Val(Float64)`.
+"""
+@inline function metric_centered_first(scheme::MEG{Order}, samples::NTuple{Order, T}, ϵ = eps(T), ::Val{C} = Val(Float64)) where {Order, T, C}
+    weights, divisor = metric_centered_weights(scheme)
+    radius = Order ÷ 2
+    terms = ntuple(Val(radius)) do k
+        (C(weights[k]) / C(divisor)) * difference(Metric(), samples[radius + k], samples[radius + 1 - k])
+    end
+    value = compensated_sum(terms)
+    return value * (abs(value) >= ϵ)
+end
+
+"""
+    metric_boundary_first(scheme::MEG, side, samples, coefficient_type; ϵ)
+
+Return the first derivatives at the low or high end of the stencil in increasing
+index order. Pass `Val(:low)` or `Val(:high)` and a tuple in increasing index
+order. Supply `Order + 1` samples, or six samples for MEG6.
+"""
+@inline function metric_boundary_first(scheme::MEG{Order}, ::Val{:low}, samples::NTuple{N, T}, coeff::Val = Val(Float64); ϵ = 50 * eps(T)) where {Order, N, T}
+    width = metric_boundary_width(scheme)
+    N == width || throw(ArgumentError("MEG$Order requires $width boundary samples"))
+    return ntuple(k -> metric_inward_value(scheme, samples, k - 1, coeff, ϵ), Val(Order ÷ 2))
+end
+
+@inline function metric_boundary_first(scheme::MEG, ::Val{:high}, samples::Tuple, coeff::Val = Val(Float64); kwargs...)
+    inward = metric_boundary_first(scheme, Val(:low), reverse(samples), coeff; kwargs...)
+    return map(-, reverse(inward))
+end
+
+@inline function metric_boundary_first(scheme::MEG{6}, side::Val{:low}, samples::NTuple{6, T}, coeff::Val = Val(Float64); ϵ::T = 50 * eps(T)) where {T}
+    return metric_boundary_first(scheme, side, samples..., coeff; ϵ)
+end
+
+@inline function metric_boundary_first(scheme::MEG{6}, side::Val{:high}, samples::NTuple{6, T}, coeff::Val = Val(Float64); ϵ::T = 50 * eps(T)) where {T}
+    return metric_boundary_first(scheme, side, samples..., coeff; ϵ)
+end
+
 @inline metric_upper_coefficient(::Val{Float64}, q) = (137 // 60) * q
 @inline metric_upper_coefficient(::Val{C}, q) where {C} = C(137 / 60) * q
 
@@ -114,18 +202,18 @@ end
     )
 end
 
-"""Evaluate the centered MEG6 metric second stencil in unit logical spacing."""
-@inline metric_centered_second(::MEG{6}, a, b, c, first_lo, first_hi) =
+"""Evaluate the centered MEG metric second stencil in unit logical spacing."""
+@inline metric_centered_second(::MEG, a, b, c, first_lo, first_hi) =
     curvature(Metric(), a, b, c, first_lo, first_hi)
 
 """
-    metric_edge_state(scheme::MEG{6}, side, q, first, second)
+    metric_edge_state(scheme::MEG, side, q, first, second)
 
 Reconstruct the specified face of one cell from unit-logical-spacing metric
 derivatives. Pass `Val(:low)` or `Val(:high)`. No adjacent cell is read.
 """
-@inline metric_edge_state(::MEG{6}, ::Val{:low}, q, first, second, ::Val{C} = Val(Float64)) where {C} =
+@inline metric_edge_state(::MEG, ::Val{:low}, q, first, second, ::Val{C} = Val(Float64)) where {C} =
     q - (C(1 / 2) * first + C(1 / 12) * second)
 
-@inline metric_edge_state(::MEG{6}, ::Val{:high}, q, first, second, ::Val{C} = Val(Float64)) where {C} =
+@inline metric_edge_state(::MEG, ::Val{:high}, q, first, second, ::Val{C} = Val(Float64)) where {C} =
     q + (C(1 / 2) * first + C(1 / 12) * second)
