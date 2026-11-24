@@ -25,7 +25,10 @@ mapping or geometry samples.
 
 ## What the schemes do
 
-Face reconstruction estimates the left and right values of a scalar field at a cell face. Use these values when you calculate a numerical flux.
+For center point samples, MEG reconstructs left and right states for a
+conservative finite-difference flux. Its `1/12` curvature coefficient corrects
+the face difference for a cell-center derivative. For a physical point value
+at the face, use the mapping or a point interpolant.
 
 Metric sweeps interpolate geometry samples to shared face values and compute
 cell-center derivatives from their differences. Both schemes use one-sided

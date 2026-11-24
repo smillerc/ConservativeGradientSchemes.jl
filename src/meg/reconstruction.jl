@@ -4,7 +4,7 @@
 end
 
 @inline face_value(::Fluid, q, d1, d2, sign) = snap(q, (q + sign * d1 / 2) + d2 / 12)
-@inline face_value(::Metric, q, d1, d2, sign) = q + sign * (d1 / 2 + d2 / 12)
+@inline face_value(::Metric, q, d1, d2, sign) = q + (sign * d1 / 2 + d2 / 12)
 
 @inline fluid_first(scheme, q, I, axis, h, ::Nothing) = centered_first(scheme, q, I, axis)
 @inline fluid_first(scheme, q, I, axis, h, first) = h * first[I]

@@ -124,6 +124,31 @@ end
     @test derivative[5:8] == first_derivative[5:8]
 end
 
+@testset "MEG$order quadratic metric faces" for order in (2, 4, 6, 8)
+    backend = CPU()
+    scheme = MEG{order}()
+    h = 0.25
+    x = collect(0.0:h:2.75)
+    xf = collect((-h / 2):h:(last(x) + h / 2))
+    q = x .^ 2
+    cells = CartesianIndices(q)
+    first_derivative, second_derivative, derivative = similar(q), similar(q), similar(q)
+    edges = similar(q, length(xf))
+
+    prepare_metric_derivatives!(first_derivative, second_derivative, scheme, q, 1, (x,), cells, cells, cells, backend)
+    synchronize(backend)
+    interpolate_metric_edges!(edges, scheme, q, first_derivative, second_derivative, 1, (x,), (xf,), CartesianIndices(edges), cells, backend)
+    metric_cell_derivative!(derivative, scheme, q, first_derivative, second_derivative, 1, (x,), (xf,), cells, cells, backend)
+    synchronize(backend)
+
+    # The quadratic q(x) = x^2 is the width-h average of x^2 - h^2/12.
+    # Differencing that auxiliary function gives the exact derivative at each cell.
+    expected_edges = xf .^ 2 .- h^2 / 12
+    @test edges ≈ expected_edges atol = 1.0e-12 rtol = 0
+    @test derivative ≈ 2 .* x atol = 1.0e-12 rtol = 0
+    @test metric_edge_state(scheme, Val(:low), q[1], h * first_derivative[1], h^2 * second_derivative[1]) ≈ expected_edges[1]
+end
+
 @testset "MEG$order metric first derivative polynomial exactness" for order in (2, 4, 6, 8)
     scheme = MEG{order}()
     backend = CPU()
@@ -161,7 +186,7 @@ end
 
     fluid_pair = reconstruct_edge(scheme, q, i, 1, centers, faces, first_derivative, second_derivative)
     @test fluid_pair == (6.5 + 1 / 6, 6.5 + 1 / 6)
-    @test reconstruct_boundary_edge(scheme, q, CartesianIndex(1), 1, centers, faces, Val(:low), first_derivative, second_derivative) == 1 - (1 / 2 + 1 / 6)
+    @test reconstruct_boundary_edge(scheme, q, CartesianIndex(1), 1, centers, faces, Val(:low), first_derivative, second_derivative) ≈ 1 - 1 / 2 + 1 / 6
     @test reconstruct_edge(scheme, MinmodLimiter(), q, i, 1) == (6.5, 6.5)
     @test reconstruct_edge(scheme, MP5Limiter(), q, i, 1) == (6.5, 6.5)
     @test reconstruct_edge(scheme, q, i, 1, first_derivative) == (6.5, 6.5)

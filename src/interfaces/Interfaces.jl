@@ -48,6 +48,11 @@ overload computes that pair and calls `limit_face_pair`. Use it for midpoint
 faces on a uniform logical axis. A scheme can specialize the overload when
 it needs to limit intermediate face candidates.
 
+With MEG and center point samples, use the returned states to form a
+conservative finite-difference flux. The `1/12` curvature coefficient corrects
+the flux difference for a cell-center derivative. For midpoint point values,
+use a point interpolant.
+
 `first` and `second` are read-only cell-indexed arrays for the same samples and
 axis, with the units of the first and second logical derivatives, respectively.
 With only `first`, a scheme can form its second derivatives locally. With both,
@@ -144,9 +149,11 @@ For `Central`, evaluate each face directly from the samples. Its face weights
 produce the centered derivative after differencing in the interior. Use the
 inward closure where the interior stencil would cross `valid_cells`.
 
-For MEG, use the arithmetic mean of the two reconstructions on interior faces. On a low
-or high boundary of `valid_cells`, call `reconstruct_boundary_edge` with the
-adjacent in-domain cell. Read no exterior geometry or derivative values.
+For MEG, supply center point samples. Use the arithmetic mean of the two
+reconstructions on interior faces. On a low or high boundary of `valid_cells`,
+call `reconstruct_boundary_edge` with the adjacent in-domain cell. Read no
+exterior geometry or derivative values. Use these face values for conservative
+finite differences. Evaluate the mapping at the face for physical point coordinates.
 
 Index `dest` by the face coordinate index along `axis` and by cell indices
 in transverse directions. The low and high faces of cell `j` along `axis`

@@ -209,11 +209,15 @@ end
 """
     metric_edge_state(scheme::MEG, side, q, first, second)
 
-Reconstruct the specified face of one cell from unit-logical-spacing metric
-derivatives. Pass `Val(:low)` or `Val(:high)`. No adjacent cell is read.
+Return one cell's contribution to a conservative finite-difference metric face.
+Supply a center point sample and its derivatives in unit logical spacing.
+Use `Val(:low)` for `q - first/2 + second/12` and `Val(:high)` for
+`q + first/2 + second/12`. The curvature term has the same sign on both faces.
+The `1/12` coefficient corrects the face difference for use as a cell-center
+derivative. Evaluate the mapping at the face when you need its point coordinates.
 """
 @inline metric_edge_state(::MEG, ::Val{:low}, q, first, second, ::Val{C} = Val(Float64)) where {C} =
-    q - (C(1 / 2) * first + C(1 / 12) * second)
+    q + (-C(1 / 2) * first + C(1 / 12) * second)
 
 @inline metric_edge_state(::MEG, ::Val{:high}, q, first, second, ::Val{C} = Val(Float64)) where {C} =
     q + (C(1 / 2) * first + C(1 / 12) * second)
